@@ -1,0 +1,218 @@
+#!/bin/bash
+# Script hecho por coquito :3
+
+# ==========================================
+# PALETA DE COLORES
+# ==========================================
+greenColour="\e[0;32m\033[1m"
+endColour="\033[0m\e[0m"
+redColour="\e[0;31m\033[1m"
+blueColour="\e[0;34m\033[1m"
+yellowColour="\e[0;33m\033[1m"
+purpleColour="\e[0;35m\033[1m"
+turquoiseColour="\e[0;36m\033[1m"
+grayColour="\e[0;37m\033[1m"
+
+# ==========================================
+# CONTROL C
+# ==========================================
+function ctrl_c(){
+    echo -e "\n\n${redColour}[!] Saliendo de forma segura...${endColour}"
+    tput cnorm # Recuperamos el cursor antes de salir
+    exit 1
+}
+trap ctrl_c INT 
+
+# ==========================================
+# PANEL DE AYUDA
+# ==========================================
+function helpPanel(){
+    echo -e "\n${yellowColour}[+]${endColour} ${grayColour}Uso del simulador de ruleta :${endColour}\n"
+    echo -e "\t${blueColour}-h)${endColour} ${grayColour}Mostrar este panel de ayuda${endColour}"
+    echo -e "\t${blueColour}-m)${endColour} ${grayColour}Dinero inicial a introducir (Bankroll)${endColour}"
+    echo -e "\t${blueColour}-t)${endColour} ${grayColour}Técnica a utilizar (martingala / inverseLabrouchere)${endColour}\n"
+    echo -e "\t${yellowColour}Ejemplo:${endColour} ./ruleta.sh -m 500 -t inverseLabrouchere\n"
+}
+
+# ==========================================
+# ESTRATEGIA: MARTINGALA
+# ==========================================
+function martingala(){
+    echo -e "\n${turquoiseColour}========================================${endColour}"
+    echo -e "${yellowColour}[+]${endColour} ${grayColour}Estrategia:${endColour} ${blueColour}Martingala Clásica${endColour}"
+    echo -e "${yellowColour}[+]${endColour} ${grayColour}Saldo Inicial:${endColour} ${greenColour}$money ${endColour}"
+    echo -e "${turquoiseColour}========================================${endColour}\n"
+    
+    echo -ne "${turquoiseColour}[?] ¿Con cuánto dinero quieres hacer tu apuesta inicial?: ${endColour}" && read apuesta_inicial
+    echo -ne "${turquoiseColour}[?] ¿A qué deseas apostar constantemente (par/impar)?: ${endColour}" && read par_impar
+
+    apuesta_actual=$apuesta_inicial
+
+    tput civis # Ocultar el cursor
+   
+    while true; do 
+        # 1. Comprobamos saldo suficiente
+        if [ "$money" -lt "$apuesta_actual" ]; then
+            echo -e "\n${redColour}[!] Saldo insuficiente para apostar $apuesta_actual $ (Tienes: $money $).${endColour}"
+            echo -e "${redColour}[!] Fin del juego. Bancarrota.${endColour}\n"
+            tput cnorm; exit 0
+        fi
+
+        # 2. Cobramos la apuesta por adelantado
+        money=$(( money - apuesta_actual ))
+        
+        random_number="$((RANDOM % 37))"
+        echo -e "\n${grayColour}----------------------------------------${endColour}"
+        echo -e "${yellowColour}[*]${endColour} ${grayColour}Apostando ${blueColour}$apuesta_actual ${grayColour} al ${purpleColour}$par_impar${endColour}..."
+        sleep 1
+        echo -e "${yellowColour}[+]${endColour} ${grayColour}La ruleta ha caído en el número:${endColour} ${blueColour}$random_number${endColour}"
+
+        # 3. Determinamos la paridad
+        if [ "$random_number" -eq 0 ]; then
+            resultado="cero"
+        elif [ "$((random_number % 2))" -eq 0 ]; then
+            resultado="par"
+        else
+            resultado="impar"
+        fi
+
+        # 4. Evaluamos victoria o derrota
+        if [ "$par_impar" == "$resultado" ]; then
+            ganancia=$(( apuesta_actual * 2 ))
+            money=$(( money + ganancia ))
+            echo -e "${greenColour}[+] ¡GANASTE!${endColour} ${grayColour}Recibes ${greenColour}+$ganancia ${endColour}"
+            echo -e "${yellowColour}[$]${endColour} ${grayColour}Saldo actual:${endColour} ${greenColour}$money ${endColour}"
+            
+            # Reseteamos a la apuesta inicial tras ganar
+            apuesta_actual=$apuesta_inicial
+        else
+            echo -e "${redColour}[-] PERDISTE.${endColour} ${grayColour}Pierdes ${redColour}-$apuesta_actual ${endColour}"
+            echo -e "${yellowColour}[$]${endColour} ${grayColour}Saldo actual:${endColour} ${greenColour}$money ${endColour}"
+            
+            # Duplicamos la apuesta tras perder
+            apuesta_actual=$(( apuesta_actual * 2 ))
+        fi
+        sleep 1
+    done
+}
+
+# ==========================================
+# ESTRATEGIA: LABOUCHERE INVERSA
+# ==========================================
+function inverseLabrouchere(){
+    echo -e "\n${turquoiseColour}========================================${endColour}"
+    echo -e "${yellowColour}[+]${endColour} ${grayColour}Estrategia:${endColour} ${blueColour}Labouchere Inversa${endColour}"
+    echo -e "${yellowColour}[+]${endColour} ${grayColour}Saldo Inicial:${endColour} ${greenColour}$money ${endColour}"
+    echo -e "${turquoiseColour}========================================${endColour}\n"
+    
+    echo -ne "${turquoiseColour}[?] ¿A qué deseas apostar constantemente (par/impar)?: ${endColour}" && read par_impar
+
+    declare -a my_sequence=(1 2 3 4)
+
+    bet_to_renew=$(( money + 50 ))
+    echo -e "${yellowColour}[i]${endColour} ${grayColour}Tope máximo para renovar secuencia:${endColour} ${greenColour}$bet_to_renew ${endColour}\n"
+
+    tput civis # Ocultar el cursor
+
+    while true; do
+        # 1. Verificar si la secuencia se quedó vacía
+        if [ ${#my_sequence[@]} -eq 0 ]; then
+            echo -e "\n${redColour}[!] La secuencia se ha quedado vacía (Límite de pérdidas).${endColour}"
+            echo -e "${redColour}[!] Terminando partida. Saldo final: $money ${endColour}\n"
+            tput cnorm; exit 0
+        fi
+
+        # 2. Calcular la apuesta segura
+        if [ ${#my_sequence[@]} -eq 1 ]; then
+            bet=${my_sequence[0]}
+        else
+            bet=$(( my_sequence[0] + my_sequence[-1] ))
+        fi
+
+        # Validar si tenemos dinero para la apuesta
+        if [ "$money" -lt "$bet" ]; then
+            echo -e "\n${redColour}[!] Saldo insuficiente para continuar la secuencia.${endColour}"
+            tput cnorm; exit 0
+        fi
+
+        # Cobramos la apuesta
+        money=$(( money - bet ))
+
+        random_number=$(( RANDOM % 37 ))
+        echo -e "\n${grayColour}----------------------------------------${endColour}"
+        echo -e "${yellowColour}[*]${endColour} ${grayColour}Secuencia actual:${endColour} ${purpleColour}[${my_sequence[*]}]${endColour}"
+        echo -e "${yellowColour}[*]${endColour} ${grayColour}Apostando ${blueColour}$bet ${grayColour} al ${purpleColour}$par_impar${endColour}..."
+        sleep 1
+        echo -e "${yellowColour}[+]${endColour} ${grayColour}Número ganador:${endColour} ${blueColour}$random_number${endColour}"
+
+        # 3. Determinamos la paridad
+        if [ "$random_number" -eq 0 ]; then
+            resultado="cero"
+        elif [ "$((random_number % 2))" -eq 0 ]; then
+            resultado="par"
+        else
+            resultado="impar"
+        fi
+
+        # 4. Evaluamos victoria o derrota
+        if [ "$par_impar" == "$resultado" ]; then
+            ganancia=$(( bet * 2 ))
+            money=$(( money + ganancia ))
+
+            # Agregar ganancia al final
+            my_sequence+=("$bet")        
+            my_sequence=("${my_sequence[@]}")
+            
+            echo -e "${greenColour}[+] ¡GANASTE!${endColour} ${grayColour}Recibes ${greenColour}+$ganancia ${endColour}"
+            echo -e "${yellowColour}[$]${endColour} ${grayColour}Saldo actual:${endColour} ${greenColour}$money ${endColour}"
+        else
+            echo -e "${redColour}[-] PERDISTE.${endColour} ${grayColour}Pierdes ${redColour}-$bet ${endColour}"
+            echo -e "${yellowColour}[$]${endColour} ${grayColour}Saldo actual:${endColour} ${greenColour}$money ${endColour}"
+
+            # Quitamos los extremos
+            unset 'my_sequence[0]'
+            unset 'my_sequence[-1]' 2>/dev/null
+            my_sequence=("${my_sequence[@]}") 
+        fi
+
+        # 5. Renovación y reajuste de la secuencia (Límites)
+        if [ "$money" -ge "$bet_to_renew" ]; then
+            echo -e "\n${greenColour}[!] ¡Tope de ganancias superado! (${bet_to_renew} $)${endColour}"
+            bet_to_renew=$(( bet_to_renew + 50 ))
+            my_sequence=(1 2 3 4)
+            echo -e "${turquoiseColour}[i] Secuencia restablecida a [${my_sequence[*]}]${endColour}"
+            echo -e "${turquoiseColour}[i] Nuevo tope máximo: $bet_to_renew $${endColour}"
+            sleep 2
+
+        elif [ "$money" -lt "$(( bet_to_renew - 100 ))" ]; then
+            echo -e "\n${redColour}[!] Límite crítico de pérdidas alcanzado.${endColour}"
+            bet_to_renew=$(( bet_to_renew - 100 ))
+            echo -e "${turquoiseColour}[i] El tope máximo se ha ajustado hacia abajo: $bet_to_renew ${endColour}"
+            sleep 2
+        fi
+    done
+}
+
+# ==========================================
+# FLUJO PRINCIPAL Y GETOPTS
+# ==========================================
+while getopts "m:t:h" arg; do
+    case $arg in
+        m) money=$OPTARG;;
+        t) technique=$OPTARG;;
+        h) helpPanel; exit 0;;
+    esac
+done
+
+if [ "$money" ] && [ "$technique" ]; then
+    if [ "$technique" == "martingala" ]; then
+        martingala
+    elif [ "$technique" == "inverseLabrouchere" ]; then
+        inverseLabrouchere        
+    else
+        echo -e "\n${redColour}[!] Técnica incorrecta. Opciones válidas: martingala / inverseLabrouchere${endColour}"
+        helpPanel
+    fi
+else
+    helpPanel
+fi
